@@ -3,7 +3,7 @@
 ## Milestone 1: Core USB
 **Goal**: Basic firmware structure with USB keyboard functionality and debugging
 
-- [ ] Sidechannel for debugging
+- [x] Sidechannel for debugging
 - [ ] Initialize USB HID keyboard descriptor
 - [ ] Initialize USB HID mouse descriptor
 - [ ] Basic key matrix scanning

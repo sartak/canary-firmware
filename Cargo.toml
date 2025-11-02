@@ -7,7 +7,12 @@ version = "0.1.0"
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7.5"
 embassy-executor = { version = "0.9.1", features = ["arch-cortex-m", "executor-thread"] }
+embassy-futures = "0.1.2"
 embassy-rp = { version = "0.8.0", features = ["rp2040", "intrinsics", "rom-func-cache"] }
+embassy-sync = "0.7.2"
+embassy-usb = { version = "0.5.1", features = ["max-interface-count-2", "max-handler-count-1"] }
+portable-atomic = { version = "1.11.1", features = ["critical-section"] }
+static_cell = "2.1.1"
 panic-halt = "1.0.0"
 
 [profile.dev]
