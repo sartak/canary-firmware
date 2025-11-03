@@ -12,7 +12,7 @@ use embassy_usb::class::hid::{HidReaderWriter, State as HidState};
 use embassy_usb::{Builder, Config};
 use panic_halt as _;
 use static_cell::StaticCell;
-use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
+use usbd_hid::descriptor::{KeyboardReport, MouseReport, SerializedDescriptor};
 
 const SERIAL_CHANNEL_CAPACITY: usize = 8;
 const USB_MAX_PACKET_SIZE: usize = 64;
@@ -41,6 +41,7 @@ async fn main(_spawner: Spawner) {
     static CONTROL_BUF: StaticCell<[u8; USB_MAX_PACKET_SIZE]> = StaticCell::new();
     static ACM_STATE: StaticCell<AcmState> = StaticCell::new();
     static KEYBOARD_HID_STATE: StaticCell<HidState> = StaticCell::new();
+    static MOUSE_HID_STATE: StaticCell<HidState> = StaticCell::new();
 
     let mut config = Config::new(0x2E8A, 0x000a);
     config.manufacturer = Some("shawn.dev");
@@ -48,6 +49,10 @@ async fn main(_spawner: Spawner) {
     config.serial_number = Some("1");
     config.max_power = USB_MAX_POWER;
     config.max_packet_size_0 = USB_MAX_PACKET_SIZE as u8;
+    config.device_class = 0xef;
+    config.device_sub_class = 0x02;
+    config.device_protocol = 0x01;
+    config.composite_with_iads = true;
 
     let mut builder = Builder::new(
         driver,
@@ -72,6 +77,17 @@ async fn main(_spawner: Spawner) {
             request_handler: None,
             poll_ms: HID_POLL_MS,
             max_packet_size: KEYBOARD_MAX_PACKET_SIZE as u16,
+        },
+    );
+
+    let _mouse = HidReaderWriter::<_, 1, MOUSE_MAX_PACKET_SIZE>::new(
+        &mut builder,
+        MOUSE_HID_STATE.init(HidState::new()),
+        embassy_usb::class::hid::Config {
+            report_descriptor: MouseReport::desc(),
+            request_handler: None,
+            poll_ms: HID_POLL_MS,
+            max_packet_size: MOUSE_MAX_PACKET_SIZE as u16,
         },
     );
 

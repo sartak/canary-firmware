@@ -5,7 +5,7 @@
 
 - [x] Sidechannel for debugging
 - [x] Initialize USB HID keyboard descriptor
-- [ ] Initialize USB HID mouse descriptor
+- [x] Initialize USB HID mouse descriptor
 - [ ] Basic key matrix scanning
 - [ ] Raw key input → USB HID output
 - [ ] Debouncing
