@@ -1,6 +1,9 @@
 #![no_std]
 #![no_main]
 
+mod keypin;
+mod matrix;
+
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
 use embassy_rp::peripherals::USB;
@@ -10,6 +13,9 @@ use embassy_sync::channel::Channel;
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State as AcmState};
 use embassy_usb::class::hid::{HidReaderWriter, State as HidState};
 use embassy_usb::{Builder, Config};
+use futures_util::StreamExt;
+use keypin::Keypin;
+use matrix::{Matrix, MatrixEvent};
 use panic_halt as _;
 use static_cell::StaticCell;
 use usbd_hid::descriptor::{KeyboardReport, MouseReport, SerializedDescriptor};
@@ -94,6 +100,62 @@ async fn main(_spawner: Spawner) {
     let mut usb = builder.build();
     let usb = usb.run();
 
+    let mut matrix = Matrix::new([
+        Keypin::new(p.PIN_0, "0"),
+        // 1 is used for UART
+        Keypin::new(p.PIN_2, "2"),
+        Keypin::new(p.PIN_3, "3"),
+        Keypin::new(p.PIN_4, "4"),
+        Keypin::new(p.PIN_5, "5"),
+        Keypin::new(p.PIN_6, "6"),
+        Keypin::new(p.PIN_7, "7"),
+        Keypin::new(p.PIN_8, "8"),
+        Keypin::new(p.PIN_9, "9"),
+        // 10 is not broken out in Pro Micro form factor
+        Keypin::new(p.PIN_10, "10"),
+        // 11 is not broken out in Pro Micro form factor
+        Keypin::new(p.PIN_11, "11"),
+        Keypin::new(p.PIN_12, "12"),
+        Keypin::new(p.PIN_13, "13"),
+        Keypin::new(p.PIN_14, "14"),
+        Keypin::new(p.PIN_15, "15"),
+        Keypin::new(p.PIN_16, "16"),
+        // 17 is not broken out in Pro Micro form factor
+        Keypin::new(p.PIN_17, "17"),
+        // 18 is not broken out in Pro Micro form factor
+        Keypin::new(p.PIN_18, "18"),
+        // 19 is not broken out in Pro Micro form factor
+        Keypin::new(p.PIN_19, "19"),
+        Keypin::new(p.PIN_20, "20"),
+        Keypin::new(p.PIN_21, "21"),
+        Keypin::new(p.PIN_22, "22"),
+        Keypin::new(p.PIN_23, "23"),
+        // 24 is not broken out in Pro Micro form factor
+        Keypin::new(p.PIN_24, "24"),
+        Keypin::new(p.PIN_25, "25"),
+        Keypin::new(p.PIN_26, "26"),
+        Keypin::new(p.PIN_27, "27"),
+        Keypin::new(p.PIN_28, "28"),
+        Keypin::new(p.PIN_29, "29"),
+    ]);
+
+    let keyboard = async {
+        loop {
+            if let Some(event) = matrix.next().await {
+                match event {
+                    MatrixEvent::KeyDown(label) => {
+                        let _ = SERIAL_CHANNEL.try_send(label);
+                        let _ = SERIAL_CHANNEL.try_send(" down\r\n");
+                    }
+                    MatrixEvent::KeyUp(label) => {
+                        let _ = SERIAL_CHANNEL.try_send(label);
+                        let _ = SERIAL_CHANNEL.try_send(" up\r\n");
+                    }
+                }
+            }
+        }
+    };
+
     let serial = async {
         loop {
             serial.wait_connection().await;
@@ -110,5 +172,5 @@ async fn main(_spawner: Spawner) {
         }
     };
 
-    embassy_futures::join::join(usb, serial).await;
+    embassy_futures::join::join3(usb, serial, keyboard).await;
 }
