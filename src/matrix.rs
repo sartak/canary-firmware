@@ -3,8 +3,8 @@ use core::task::Poll;
 use futures_core::Stream;
 
 pub enum MatrixEvent {
-    KeyDown(&'static str),
-    KeyUp(&'static str),
+    KeyDown(&'static str, Option<char>),
+    KeyUp(&'static str, Option<char>),
 }
 
 pub struct Matrix<const N: usize> {
@@ -28,12 +28,13 @@ impl<const N: usize> Stream for Matrix<N> {
 
         for pin in this.pins.iter_mut() {
             let pin_label = pin.label;
+            let pin_keycode = pin.keycode;
 
             let mut pin = core::pin::Pin::new(pin);
             if let Poll::Ready(Some(event)) = pin.as_mut().poll_next(cx) {
                 let matrix_event = match event {
-                    KeypinEvent::Down => MatrixEvent::KeyDown(pin_label),
-                    KeypinEvent::Up => MatrixEvent::KeyUp(pin_label),
+                    KeypinEvent::Down => MatrixEvent::KeyDown(pin_label, pin_keycode),
+                    KeypinEvent::Up => MatrixEvent::KeyUp(pin_label, pin_keycode),
                 };
                 return Poll::Ready(Some(matrix_event));
             }

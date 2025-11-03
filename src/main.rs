@@ -75,7 +75,7 @@ async fn main(_spawner: Spawner) {
         USB_MAX_PACKET_SIZE as u16,
     );
 
-    let _keyboard = HidReaderWriter::<_, 1, KEYBOARD_MAX_PACKET_SIZE>::new(
+    let keyboard = HidReaderWriter::<_, 1, KEYBOARD_MAX_PACKET_SIZE>::new(
         &mut builder,
         KEYBOARD_HID_STATE.init(HidState::new()),
         embassy_usb::class::hid::Config {
@@ -101,55 +101,78 @@ async fn main(_spawner: Spawner) {
     let usb = usb.run();
 
     let mut matrix = Matrix::new([
-        Keypin::new(p.PIN_0, "0"),
+        Keypin::new(p.PIN_0, "0", Some('A')),
         // 1 is used for UART
-        Keypin::new(p.PIN_2, "2"),
-        Keypin::new(p.PIN_3, "3"),
-        Keypin::new(p.PIN_4, "4"),
-        Keypin::new(p.PIN_5, "5"),
-        Keypin::new(p.PIN_6, "6"),
-        Keypin::new(p.PIN_7, "7"),
-        Keypin::new(p.PIN_8, "8"),
-        Keypin::new(p.PIN_9, "9"),
+        Keypin::new(p.PIN_2, "2", Some('B')),
+        Keypin::new(p.PIN_3, "3", Some('C')),
+        Keypin::new(p.PIN_4, "4", Some('D')),
+        Keypin::new(p.PIN_5, "5", Some('E')),
+        Keypin::new(p.PIN_6, "6", Some('F')),
+        Keypin::new(p.PIN_7, "7", Some('G')),
+        Keypin::new(p.PIN_8, "8", Some('H')),
+        Keypin::new(p.PIN_9, "9", Some('I')),
         // 10 is not broken out in Pro Micro form factor
-        Keypin::new(p.PIN_10, "10"),
+        Keypin::new(p.PIN_10, "10", None),
         // 11 is not broken out in Pro Micro form factor
-        Keypin::new(p.PIN_11, "11"),
-        Keypin::new(p.PIN_12, "12"),
-        Keypin::new(p.PIN_13, "13"),
-        Keypin::new(p.PIN_14, "14"),
-        Keypin::new(p.PIN_15, "15"),
-        Keypin::new(p.PIN_16, "16"),
+        Keypin::new(p.PIN_11, "11", None),
+        Keypin::new(p.PIN_12, "12", Some('J')),
+        Keypin::new(p.PIN_13, "13", Some('K')),
+        Keypin::new(p.PIN_14, "14", Some('L')),
+        Keypin::new(p.PIN_15, "15", Some('M')),
+        Keypin::new(p.PIN_16, "16", Some('N')),
         // 17 is not broken out in Pro Micro form factor
-        Keypin::new(p.PIN_17, "17"),
+        Keypin::new(p.PIN_17, "17", None),
         // 18 is not broken out in Pro Micro form factor
-        Keypin::new(p.PIN_18, "18"),
+        Keypin::new(p.PIN_18, "18", None),
         // 19 is not broken out in Pro Micro form factor
-        Keypin::new(p.PIN_19, "19"),
-        Keypin::new(p.PIN_20, "20"),
-        Keypin::new(p.PIN_21, "21"),
-        Keypin::new(p.PIN_22, "22"),
-        Keypin::new(p.PIN_23, "23"),
+        Keypin::new(p.PIN_19, "19", None),
+        Keypin::new(p.PIN_20, "20", Some('O')),
+        Keypin::new(p.PIN_21, "21", Some('P')),
+        Keypin::new(p.PIN_22, "22", Some('Q')),
+        Keypin::new(p.PIN_23, "23", Some('R')),
         // 24 is not broken out in Pro Micro form factor
-        Keypin::new(p.PIN_24, "24"),
-        Keypin::new(p.PIN_25, "25"),
-        Keypin::new(p.PIN_26, "26"),
-        Keypin::new(p.PIN_27, "27"),
-        Keypin::new(p.PIN_28, "28"),
-        Keypin::new(p.PIN_29, "29"),
+        Keypin::new(p.PIN_24, "24", None),
+        Keypin::new(p.PIN_25, "25", Some('S')),
+        Keypin::new(p.PIN_26, "26", Some('T')),
+        Keypin::new(p.PIN_27, "27", Some('U')),
+        Keypin::new(p.PIN_28, "28", Some('V')),
+        Keypin::new(p.PIN_29, "29", Some('W')),
     ]);
+
+    let (_, mut writer) = keyboard.split();
 
     let keyboard = async {
         loop {
             if let Some(event) = matrix.next().await {
                 match event {
-                    MatrixEvent::KeyDown(label) => {
+                    MatrixEvent::KeyDown(label, keycode) => {
                         let _ = SERIAL_CHANNEL.try_send(label);
                         let _ = SERIAL_CHANNEL.try_send(" down\r\n");
+
+                        if let Some(keycode) = keycode {
+                            let hid_keycode = (keycode as u8) - b'A' + 0x04;
+                            let report = KeyboardReport {
+                                modifier: 0,
+                                reserved: 0,
+                                leds: 0,
+                                keycodes: [hid_keycode, 0, 0, 0, 0, 0],
+                            };
+                            let _ = writer.write_serialize(&report).await;
+                        }
                     }
-                    MatrixEvent::KeyUp(label) => {
+                    MatrixEvent::KeyUp(label, keycode) => {
                         let _ = SERIAL_CHANNEL.try_send(label);
                         let _ = SERIAL_CHANNEL.try_send(" up\r\n");
+
+                        if keycode.is_some() {
+                            let report = KeyboardReport {
+                                modifier: 0,
+                                reserved: 0,
+                                leds: 0,
+                                keycodes: [0, 0, 0, 0, 0, 0],
+                            };
+                            let _ = writer.write_serialize(&report).await;
+                        }
                     }
                 }
             }
