@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+mod debounce;
 mod keypin;
 mod matrix;
 

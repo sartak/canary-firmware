@@ -8,7 +8,7 @@
 - [x] Initialize USB HID mouse descriptor
 - [x] Basic key matrix scanning
 - [x] Raw key input → USB HID output
-- [ ] Debouncing
+- [x] Debouncing
 
 ## Milestone 2: Split Keyboard
 **Goal**: Split keyboard support
