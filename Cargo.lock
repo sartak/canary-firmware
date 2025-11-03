@@ -136,6 +136,7 @@ dependencies = [
  "panic-halt",
  "portable-atomic",
  "static_cell",
+ "usbd-hid",
 ]
 
 [[package]]

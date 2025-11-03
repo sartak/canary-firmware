@@ -8,14 +8,19 @@ use embassy_rp::usb::{Driver, InterruptHandler};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State as AcmState};
+use embassy_usb::class::hid::{HidReaderWriter, State as HidState};
 use embassy_usb::{Builder, Config};
 use panic_halt as _;
 use static_cell::StaticCell;
+use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
 
 const SERIAL_CHANNEL_CAPACITY: usize = 8;
 const USB_MAX_PACKET_SIZE: usize = 64;
 const USB_MAX_POWER: u16 = 50; // milliamps
 const USB_DESCRIPTOR_BUF_SIZE: usize = 512;
+const KEYBOARD_MAX_PACKET_SIZE: usize = 8;
+const HID_POLL_MS: u8 = 1;
+const MOUSE_MAX_PACKET_SIZE: usize = 5;
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
@@ -32,8 +37,10 @@ async fn main(_spawner: Spawner) {
 
     static CONFIG_DESCRIPTOR: StaticCell<[u8; USB_DESCRIPTOR_BUF_SIZE]> = StaticCell::new();
     static BOS_DESCRIPTOR: StaticCell<[u8; USB_DESCRIPTOR_BUF_SIZE]> = StaticCell::new();
+    static MSOS_DESCRIPTOR: StaticCell<[u8; USB_DESCRIPTOR_BUF_SIZE]> = StaticCell::new();
     static CONTROL_BUF: StaticCell<[u8; USB_MAX_PACKET_SIZE]> = StaticCell::new();
     static ACM_STATE: StaticCell<AcmState> = StaticCell::new();
+    static KEYBOARD_HID_STATE: StaticCell<HidState> = StaticCell::new();
 
     let mut config = Config::new(0x2E8A, 0x000a);
     config.manufacturer = Some("shawn.dev");
@@ -47,7 +54,7 @@ async fn main(_spawner: Spawner) {
         config,
         CONFIG_DESCRIPTOR.init([0; USB_DESCRIPTOR_BUF_SIZE]),
         BOS_DESCRIPTOR.init([0; USB_DESCRIPTOR_BUF_SIZE]),
-        &mut [],
+        MSOS_DESCRIPTOR.init([0; USB_DESCRIPTOR_BUF_SIZE]),
         CONTROL_BUF.init([0; USB_MAX_PACKET_SIZE]),
     );
 
@@ -55,6 +62,17 @@ async fn main(_spawner: Spawner) {
         &mut builder,
         ACM_STATE.init(AcmState::new()),
         USB_MAX_PACKET_SIZE as u16,
+    );
+
+    let _keyboard = HidReaderWriter::<_, 1, KEYBOARD_MAX_PACKET_SIZE>::new(
+        &mut builder,
+        KEYBOARD_HID_STATE.init(HidState::new()),
+        embassy_usb::class::hid::Config {
+            report_descriptor: KeyboardReport::desc(),
+            request_handler: None,
+            poll_ms: HID_POLL_MS,
+            max_packet_size: KEYBOARD_MAX_PACKET_SIZE as u16,
+        },
     );
 
     let mut usb = builder.build();

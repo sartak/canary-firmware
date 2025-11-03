@@ -4,7 +4,7 @@
 **Goal**: Basic firmware structure with USB keyboard functionality and debugging
 
 - [x] Sidechannel for debugging
-- [ ] Initialize USB HID keyboard descriptor
+- [x] Initialize USB HID keyboard descriptor
 - [ ] Initialize USB HID mouse descriptor
 - [ ] Basic key matrix scanning
 - [ ] Raw key input → USB HID output
