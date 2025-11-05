@@ -15,7 +15,7 @@
 
 - [x] Handedness configuration
 - [x] USB connection detection for primary/secondary selection
-- [ ] Half-duplex UART serial communication on single pin (GP2/D2 via TRRS)
+- [x] Half-duplex UART-ish serial communication on single pin via TRRS
 - [ ] Key state synchronization
 - [ ] Verify both halves work independently as primary
 - [ ] Sidechannel: emit which half is primary

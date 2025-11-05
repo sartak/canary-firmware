@@ -5,6 +5,7 @@ mod debounce;
 mod keypin;
 mod matrix;
 mod stash;
+mod sync;
 
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
@@ -25,7 +26,7 @@ use stash::Stash;
 use static_cell::StaticCell;
 use usbd_hid::descriptor::{KeyboardReport, MouseReport, SerializedDescriptor};
 
-const SERIAL_CHANNEL_CAPACITY: usize = 8;
+const SERIAL_CHANNEL_CAPACITY: usize = 256;
 const USB_MAX_PACKET_SIZE: usize = 64;
 const USB_MAX_POWER: u16 = 50; // milliamps
 const USB_DESCRIPTOR_BUF_SIZE: usize = 512;
@@ -39,6 +40,9 @@ bind_interrupts!(struct Irqs {
 
 static SERIAL_CHANNEL: Channel<ThreadModeRawMutex, &'static str, SERIAL_CHANNEL_CAPACITY> =
     Channel::new();
+
+static SYNC_RX_CHANNEL: Channel<ThreadModeRawMutex, sync::SyncMessage, 8> = Channel::new();
+static SYNC_TX_CHANNEL: Channel<ThreadModeRawMutex, sync::SyncMessage, 8> = Channel::new();
 
 async fn run_primary(p: embassy_rp::Peripherals) {
     let mut stash = Stash::new(p.FLASH);
@@ -337,14 +341,61 @@ async fn run_primary(p: embassy_rp::Peripherals) {
         }
     };
 
-    embassy_futures::join::join4(usb, serial_tx, serial_rx, keyboard).await;
+    let sync = sync::primary(p.PIN_1, &SYNC_RX_CHANNEL);
+
+    let sync_handler = async {
+        loop {
+            let msg = SYNC_RX_CHANNEL.receive().await;
+            match msg {
+                sync::SyncMessage::Test(val) => {
+                    let _ = SERIAL_CHANNEL.try_send("Test(");
+                    let d2 = (val / 100) % 10;
+                    let d1 = (val / 10) % 10;
+                    let d0 = val % 10;
+                    for digit in [d2, d1, d0] {
+                        let _ = SERIAL_CHANNEL.try_send(match digit {
+                            0 => "0",
+                            1 => "1",
+                            2 => "2",
+                            3 => "3",
+                            4 => "4",
+                            5 => "5",
+                            6 => "6",
+                            7 => "7",
+                            8 => "8",
+                            9 => "9",
+                            _ => "?",
+                        });
+                    }
+                    let _ = SERIAL_CHANNEL.try_send(")\r\n");
+                }
+            }
+        }
+    };
+
+    embassy_futures::join::join(
+        embassy_futures::join::join5(usb, serial_tx, serial_rx, keyboard, sync),
+        sync_handler,
+    )
+    .await;
 }
 
 async fn run_secondary(p: embassy_rp::Peripherals) {
     let stash = Stash::new(p.FLASH);
     let _config = stash.load().unwrap_or_default();
 
-    loop {}
+    let sync = sync::secondary(p.PIN_1, &SYNC_TX_CHANNEL);
+
+    let sync_feeder = async {
+        let mut counter = 0u8;
+        loop {
+            let _ = SYNC_TX_CHANNEL.try_send(sync::SyncMessage::Test(counter));
+            counter = counter.wrapping_add(1);
+            Timer::after_millis(100).await;
+        }
+    };
+
+    embassy_futures::join::join(sync, sync_feeder).await;
 }
 
 async fn detect_usb_connection() -> bool {
