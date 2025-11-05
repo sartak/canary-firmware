@@ -13,6 +13,7 @@ use embassy_rp::usb::{Driver, InterruptHandler};
 use embassy_rp::watchdog::Watchdog;
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::Channel;
+use embassy_time::Timer;
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State as AcmState};
 use embassy_usb::class::hid::{Config as HidConfig, HidReaderWriter, State as HidState};
 use embassy_usb::{Builder, Config as UsbConfig};
@@ -276,10 +277,8 @@ async fn main(_spawner: Spawner) {
 
     let serial_tx = async {
         loop {
+            Timer::after_millis(1000).await;
             serial_writer.wait_connection().await;
-
-            // Drain any stale events
-            while SERIAL_CHANNEL.try_receive().is_ok() {}
 
             loop {
                 let msg = SERIAL_CHANNEL.receive().await;

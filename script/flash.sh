@@ -10,7 +10,5 @@ echo "Device found, flashing..."
 picotool load --update --verify --execute -t elf "$@"
 
 if [[ "$1" == *"/debug/"* ]]; then
-    echo "Debug build detected, waiting for USB serial device..."
-    sleep 2  # Give the device time to connect
     ./script/log.sh
 fi
