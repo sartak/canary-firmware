@@ -1,5 +1,6 @@
 use crate::debounce::Debounced;
 use crate::keypin::{Keypin, KeypinEvent};
+use crate::stash;
 use core::task::Poll;
 use futures_core::Stream;
 
@@ -9,12 +10,14 @@ pub enum MatrixEvent {
 }
 
 pub struct Matrix<const N: usize> {
+    hand: stash::Hand,
     pins: [Debounced<Keypin>; N],
 }
 
 impl<const N: usize> Matrix<N> {
-    pub fn new(pins: [Keypin; N]) -> Self {
+    pub fn new(hand: stash::Hand, pins: [Keypin; N]) -> Self {
         Self {
+            hand,
             pins: pins.map(Debounced::new),
         }
     }

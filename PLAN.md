@@ -13,7 +13,7 @@
 ## Milestone 2: Split Keyboard
 **Goal**: Split keyboard support
 
-- [ ] Handedness configuration
+- [x] Handedness configuration
 - [ ] USB connection detection for primary/secondary selection
 - [ ] Half-duplex UART serial communication on single pin (GP2/D2 via TRRS)
 - [ ] Key state synchronization
