@@ -15,6 +15,7 @@ embassy-usb = { version = "0.5.1", features = ["max-interface-count-4", "max-han
 futures-core = { version = "0.3.31", default-features = false }
 futures-util = { version = "0.3.31", default-features = false }
 portable-atomic = { version = "1.11.1", features = ["critical-section"] }
+rp-pac = { version = "7.0.0", features = ["rp2040"] }
 static_cell = "2.1.1"
 usbd-hid = "0.8.2"
 panic-halt = "1.0.0"

@@ -14,11 +14,11 @@
 **Goal**: Split keyboard support
 
 - [x] Handedness configuration
-- [ ] USB connection detection for primary/secondary selection
+- [x] USB connection detection for primary/secondary selection
 - [ ] Half-duplex UART serial communication on single pin (GP2/D2 via TRRS)
 - [ ] Key state synchronization
-- [ ] Verify both halves work independently as primary
-- [ ] Sidechannel: emit which half is primary
+- [x] Verify both halves work independently as primary
+- [x] Sidechannel: emit which half is primary
 
 ## Milestone 3: Configuration
 **Goal**: Compile-time configuration

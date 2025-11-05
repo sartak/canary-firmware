@@ -138,6 +138,7 @@ dependencies = [
  "futures-util",
  "panic-halt",
  "portable-atomic",
+ "rp-pac",
  "static_cell",
  "usbd-hid",
 ]
