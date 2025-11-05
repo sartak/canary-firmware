@@ -14,7 +14,7 @@
 **Goal**: Split keyboard support
 
 - [x] Handedness configuration
-- [ ] USB connection detection for primary/secondary selection
+- [x] USB connection detection for primary/secondary selection
 - [ ] Half-duplex UART serial communication on single pin (GP2/D2 via TRRS)
 - [ ] Key state synchronization
 - [ ] Verify both halves work independently as primary

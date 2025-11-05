@@ -40,10 +40,7 @@ bind_interrupts!(struct Irqs {
 static SERIAL_CHANNEL: Channel<ThreadModeRawMutex, &'static str, SERIAL_CHANNEL_CAPACITY> =
     Channel::new();
 
-#[embassy_executor::main]
-async fn main(_spawner: Spawner) {
-    let p = embassy_rp::init(Default::default());
-
+async fn run_primary(p: embassy_rp::Peripherals) {
     let mut stash = Stash::new(p.FLASH);
     let config = match stash.load() {
         Ok(c) => c,
@@ -63,6 +60,8 @@ async fn main(_spawner: Spawner) {
             let _ = SERIAL_CHANNEL.try_send("Configured as right-handed\r\n");
         }
     }
+
+    let _ = SERIAL_CHANNEL.try_send("Role: Primary (USB connected)\r\n");
 
     let driver = Driver::new(p.USB, Irqs);
 
@@ -339,4 +338,44 @@ async fn main(_spawner: Spawner) {
     };
 
     embassy_futures::join::join4(usb, serial_tx, serial_rx, keyboard).await;
+}
+
+async fn run_secondary(p: embassy_rp::Peripherals) {
+    let stash = Stash::new(p.FLASH);
+    let _config = stash.load().unwrap_or_default();
+
+    loop {}
+}
+
+async fn detect_usb_connection() -> bool {
+    rp_pac::USB.usb_muxing().write(|w| {
+        w.set_to_phy(true);
+        w.set_softcon(true);
+    });
+    rp_pac::USB.sie_ctrl().write(|w| {
+        w.set_pullup_en(true);
+    });
+
+    for _ in 0..10 {
+        let phy = rp_pac::USB.usbphy_direct().read();
+        if phy.rx_dp() && !phy.rx_dm() {
+            return true;
+        }
+        Timer::after_millis(1).await;
+    }
+
+    false
+}
+
+#[embassy_executor::main]
+async fn main(_spawner: Spawner) {
+    let p = embassy_rp::init(Default::default());
+
+    let is_primary = detect_usb_connection().await;
+
+    if is_primary {
+        run_primary(p).await;
+    } else {
+        run_secondary(p).await;
+    }
 }
