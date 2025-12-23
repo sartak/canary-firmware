@@ -3,11 +3,13 @@ use core::task::Poll;
 use embassy_time::{Duration, Instant};
 use futures_core::Stream;
 
-const DEBOUNCE_MS: u64 = 15;
+// Kailh Choc v1 (PG1350) specifies ≤10ms bounce time
+const DEBOUNCE_MS: u64 = 10;
 
 pub struct Debounced<S> {
     pub inner: S,
-    last_event_time: Option<Instant>,
+    pending: Option<(KeypinEvent, Instant)>,
+    emitted_down: bool,
 }
 
 impl<S> Debounced<S>
@@ -17,7 +19,8 @@ where
     pub fn new(inner: S) -> Self {
         Self {
             inner,
-            last_event_time: None,
+            pending: None,
+            emitted_down: false,
         }
     }
 }
@@ -32,25 +35,36 @@ where
         mut self: core::pin::Pin<&mut Self>,
         cx: &mut core::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
+        // Poll inner for new events
         let inner = core::pin::Pin::new(&mut self.inner);
-        match inner.poll_next(cx) {
-            Poll::Ready(Some(event)) => {
-                let now = Instant::now();
-                let should_emit = self
-                    .last_event_time
-                    .map(|last| now.duration_since(last) >= Duration::from_millis(DEBOUNCE_MS))
-                    .unwrap_or(true);
-
-                if should_emit {
-                    self.last_event_time = Some(now);
-                    Poll::Ready(Some(event))
-                } else {
-                    cx.waker().wake_by_ref();
-                    Poll::Pending
-                }
-            }
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Pending => Poll::Pending,
+        if let Poll::Ready(Some(event)) = inner.poll_next(cx) {
+            // New event resets the debounce timer
+            self.pending = Some((event, Instant::now()));
         }
+
+        // Check if pending event has been stable long enough
+        if let Some((event, since)) = self.pending {
+            let elapsed = Instant::now().duration_since(since);
+            if elapsed >= Duration::from_millis(DEBOUNCE_MS) {
+                // Only emit if it's a state change from what we last emitted
+                let dominated = match event {
+                    KeypinEvent::Down => self.emitted_down,
+                    KeypinEvent::Up => !self.emitted_down,
+                };
+                self.pending = None;
+                if !dominated {
+                    match event {
+                        KeypinEvent::Down => self.emitted_down = true,
+                        KeypinEvent::Up => self.emitted_down = false,
+                    }
+                    return Poll::Ready(Some(event));
+                }
+            } else {
+                // Schedule wake when debounce period expires
+                cx.waker().wake_by_ref();
+            }
+        }
+
+        Poll::Pending
     }
 }
