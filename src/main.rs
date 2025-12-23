@@ -4,11 +4,14 @@
 mod debounce;
 mod keypin;
 mod matrix;
+mod scanner;
 mod stash;
+mod sync;
 
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
-use embassy_rp::peripherals::USB;
+use embassy_rp::peripherals::{PIO0, USB};
+use embassy_rp::pio::InterruptHandler as PioInterruptHandler;
 use embassy_rp::usb::{Driver, InterruptHandler};
 use embassy_rp::watchdog::Watchdog;
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
@@ -19,13 +22,14 @@ use embassy_usb::class::hid::{Config as HidConfig, HidReaderWriter, State as Hid
 use embassy_usb::{Builder, Config as UsbConfig};
 use futures_util::StreamExt;
 use keypin::Keypin;
-use matrix::{Matrix, MatrixEvent};
+use matrix::Matrix;
 use panic_halt as _;
+use scanner::{ScanEvent, Scanner};
 use stash::Stash;
 use static_cell::StaticCell;
 use usbd_hid::descriptor::{KeyboardReport, MouseReport, SerializedDescriptor};
 
-const SERIAL_CHANNEL_CAPACITY: usize = 8;
+const SERIAL_CHANNEL_CAPACITY: usize = 32;
 const USB_MAX_PACKET_SIZE: usize = 64;
 const USB_MAX_POWER: u16 = 50; // milliamps
 const USB_DESCRIPTOR_BUF_SIZE: usize = 512;
@@ -35,10 +39,54 @@ const MOUSE_MAX_PACKET_SIZE: usize = 5;
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
+    PIO0_IRQ_0 => PioInterruptHandler<PIO0>;
 });
 
 static SERIAL_CHANNEL: Channel<ThreadModeRawMutex, &'static str, SERIAL_CHANNEL_CAPACITY> =
     Channel::new();
+
+#[derive(Clone, Copy)]
+enum KeyEvent {
+    Down(stash::Hand, u8),
+    Up(stash::Hand, u8),
+}
+
+static KEY_CHANNEL: Channel<ThreadModeRawMutex, KeyEvent, SERIAL_CHANNEL_CAPACITY> = Channel::new();
+
+const DIGITS: [&str; 10] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+fn log_index(index: u8) {
+    if index >= 10 {
+        let _ = SERIAL_CHANNEL.try_send(DIGITS[(index / 10) as usize]);
+    }
+    let _ = SERIAL_CHANNEL.try_send(DIGITS[(index % 10) as usize]);
+}
+
+fn log_pressed_keys(matrix: &Matrix) {
+    let _ = SERIAL_CHANNEL.try_send("  down: ");
+    let mut first = true;
+    for i in 0..32 {
+        if matrix.is_down(stash::Hand::Left, i) {
+            if !first {
+                let _ = SERIAL_CHANNEL.try_send(" ");
+            }
+            let _ = SERIAL_CHANNEL.try_send("L");
+            log_index(i);
+            first = false;
+        }
+    }
+    for i in 0..32 {
+        if matrix.is_down(stash::Hand::Right, i) {
+            if !first {
+                let _ = SERIAL_CHANNEL.try_send(" ");
+            }
+            let _ = SERIAL_CHANNEL.try_send("R");
+            log_index(i);
+            first = false;
+        }
+    }
+    let _ = SERIAL_CHANNEL.try_send("\r\n");
+}
 
 async fn run_primary(p: embassy_rp::Peripherals) {
     let mut stash = Stash::new(p.FLASH);
@@ -52,7 +100,9 @@ async fn run_primary(p: embassy_rp::Peripherals) {
         }
     };
 
-    match config.hand {
+    let local_hand = config.hand;
+
+    match local_hand {
         stash::Hand::Left => {
             let _ = SERIAL_CHANNEL.try_send("Configured as left-handed\r\n");
         }
@@ -100,7 +150,7 @@ async fn run_primary(p: embassy_rp::Peripherals) {
     );
     let (mut serial_writer, mut serial_reader) = serial.split();
 
-    let keyboard = HidReaderWriter::<_, 1, KEYBOARD_MAX_PACKET_SIZE>::new(
+    let keyboard_hid = HidReaderWriter::<_, 1, KEYBOARD_MAX_PACKET_SIZE>::new(
         &mut builder,
         KEYBOARD_HID_STATE.init(HidState::new()),
         HidConfig {
@@ -110,8 +160,9 @@ async fn run_primary(p: embassy_rp::Peripherals) {
             max_packet_size: KEYBOARD_MAX_PACKET_SIZE as u16,
         },
     );
+    let (mut keyboard_reader, _keyboard_writer) = keyboard_hid.split();
 
-    let _mouse = HidReaderWriter::<_, 1, MOUSE_MAX_PACKET_SIZE>::new(
+    let mouse_hid = HidReaderWriter::<_, 1, MOUSE_MAX_PACKET_SIZE>::new(
         &mut builder,
         MOUSE_HID_STATE.init(HidState::new()),
         HidConfig {
@@ -121,158 +172,30 @@ async fn run_primary(p: embassy_rp::Peripherals) {
             max_packet_size: MOUSE_MAX_PACKET_SIZE as u16,
         },
     );
+    let (mut mouse_reader, _mouse_writer) = mouse_hid.split();
 
     let mut usb = builder.build();
     let usb = usb.run();
 
-    let mut matrix = match config.hand {
-        stash::Hand::Left => {
-            Matrix::new(
-                config.hand,
-                [
-                    Keypin::new(p.PIN_0, "0", Some('g')),
-                    // 1 is used for UART
-                    Keypin::new(p.PIN_2, "2", Some('q')),
-                    Keypin::new(p.PIN_3, "3", Some('j')),
-                    Keypin::new(p.PIN_4, "4", Some('v')),
-                    Keypin::new(p.PIN_5, "5", Some('d')),
-                    Keypin::new(p.PIN_6, "6", Some('k')),
-                    Keypin::new(p.PIN_7, "7", Some('w')),
-                    Keypin::new(p.PIN_8, "8", None),
-                    Keypin::new(p.PIN_9, "9", Some('\x08')),
-                    // 10 is not broken out in Pro Micro form factor
-                    Keypin::new(p.PIN_10, "10", None),
-                    // 11 is not broken out in Pro Micro form factor
-                    Keypin::new(p.PIN_11, "11", None),
-                    Keypin::new(p.PIN_12, "12", None),
-                    Keypin::new(p.PIN_13, "13", None),
-                    Keypin::new(p.PIN_14, "14", None),
-                    Keypin::new(p.PIN_15, "15", None),
-                    Keypin::new(p.PIN_16, "16", None),
-                    // 17 is not broken out in Pro Micro form factor
-                    Keypin::new(p.PIN_17, "17", None),
-                    // 18 is not broken out in Pro Micro form factor
-                    Keypin::new(p.PIN_18, "18", None),
-                    // 19 is not broken out in Pro Micro form factor
-                    Keypin::new(p.PIN_19, "19", None),
-                    Keypin::new(p.PIN_20, "20", Some('r')),
-                    Keypin::new(p.PIN_21, "21", Some('t')),
-                    Keypin::new(p.PIN_22, "22", Some('c')),
-                    Keypin::new(p.PIN_23, "23", Some('s')),
-                    // 24 is not broken out in Pro Micro form factor
-                    Keypin::new(p.PIN_24, "24", None),
-                    Keypin::new(p.PIN_25, "25", None),
-                    Keypin::new(p.PIN_26, "26", Some('l')),
-                    Keypin::new(p.PIN_27, "27", Some('y')),
-                    Keypin::new(p.PIN_28, "28", Some('p')),
-                    Keypin::new(p.PIN_29, "29", Some('b')),
-                ],
-            )
-        }
-        stash::Hand::Right => {
-            Matrix::new(
-                config.hand,
-                [
-                    Keypin::new(p.PIN_0, "0", Some('m')),
-                    // 1 is used for UART
-                    Keypin::new(p.PIN_2, "2", Some('\n')),
-                    Keypin::new(p.PIN_3, "3", Some(',')),
-                    Keypin::new(p.PIN_4, "4", Some('.')),
-                    Keypin::new(p.PIN_5, "5", Some('h')),
-                    Keypin::new(p.PIN_6, "6", Some('f')),
-                    Keypin::new(p.PIN_7, "7", Some('\'')),
-                    Keypin::new(p.PIN_8, "8", None),
-                    Keypin::new(p.PIN_9, "9", Some(' ')),
-                    // 10 is not broken out in Pro Micro form factor
-                    Keypin::new(p.PIN_10, "10", None),
-                    // 11 is not broken out in Pro Micro form factor
-                    Keypin::new(p.PIN_11, "11", None),
-                    Keypin::new(p.PIN_12, "12", None),
-                    Keypin::new(p.PIN_13, "13", None),
-                    Keypin::new(p.PIN_14, "14", None),
-                    Keypin::new(p.PIN_15, "15", None),
-                    Keypin::new(p.PIN_16, "16", None),
-                    // 17 is not broken out in Pro Micro form factor
-                    Keypin::new(p.PIN_17, "17", None),
-                    // 18 is not broken out in Pro Micro form factor
-                    Keypin::new(p.PIN_18, "18", None),
-                    // 19 is not broken out in Pro Micro form factor
-                    Keypin::new(p.PIN_19, "19", None),
-                    Keypin::new(p.PIN_20, "20", Some('i')),
-                    Keypin::new(p.PIN_21, "21", Some('n')),
-                    Keypin::new(p.PIN_22, "22", Some('a')),
-                    Keypin::new(p.PIN_23, "23", Some('e')),
-                    // 24 is not broken out in Pro Micro form factor
-                    Keypin::new(p.PIN_24, "24", None),
-                    Keypin::new(p.PIN_25, "25", None),
-                    Keypin::new(p.PIN_26, "26", Some('u')),
-                    Keypin::new(p.PIN_27, "27", Some('o')),
-                    Keypin::new(p.PIN_28, "28", Some('f')),
-                    Keypin::new(p.PIN_29, "29", Some('z')),
-                ],
-            )
-        }
-    };
-
-    let (_, mut writer) = keyboard.split();
-
-    let keyboard = async {
-        loop {
-            if let Some(event) = matrix.next().await {
-                match event {
-                    MatrixEvent::KeyDown(label, keycode) => {
-                        let _ = SERIAL_CHANNEL.try_send(if config.hand == stash::Hand::Left {
-                            "Left "
-                        } else {
-                            "Right "
-                        });
-                        let _ = SERIAL_CHANNEL.try_send(label);
-                        let _ = SERIAL_CHANNEL.try_send(" down\r\n");
-
-                        if let Some(keycode) = keycode {
-                            let hid_keycode = match keycode {
-                                'a'..='z' => (keycode as u8) - b'a' + 0x04,
-                                'A'..='Z' => (keycode as u8) - b'A' + 0x04,
-                                '\n' => 0x28,
-                                '\x08' => 0x2a,
-                                ' ' => 0x2c,
-                                '\'' => 0x34,
-                                ',' => 0x36,
-                                '.' => 0x37,
-                                _ => 0,
-                            };
-                            let report = KeyboardReport {
-                                modifier: 0,
-                                reserved: 0,
-                                leds: 0,
-                                keycodes: [hid_keycode, 0, 0, 0, 0, 0],
-                            };
-                            let _ = writer.write_serialize(&report).await;
-                        }
-                    }
-                    MatrixEvent::KeyUp(label, keycode) => {
-                        let _ = SERIAL_CHANNEL.try_send(if config.hand == stash::Hand::Left {
-                            "Left "
-                        } else {
-                            "Right "
-                        });
-                        let _ = SERIAL_CHANNEL.try_send(label);
-                        let _ = SERIAL_CHANNEL.try_send(" up\r\n");
-
-                        if keycode.is_some() {
-                            let report = KeyboardReport {
-                                modifier: 0,
-                                reserved: 0,
-                                leds: 0,
-                                keycodes: [0, 0, 0, 0, 0, 0],
-                            };
-                            let _ = writer.write_serialize(&report).await;
-                        }
-                    }
-                }
-            }
-        }
-    };
+    let mut scanner = Scanner::new([
+        Keypin::new(p.PIN_0, 0),
+        Keypin::new(p.PIN_2, 1),
+        Keypin::new(p.PIN_3, 2),
+        Keypin::new(p.PIN_4, 3),
+        Keypin::new(p.PIN_5, 4),
+        Keypin::new(p.PIN_6, 5),
+        Keypin::new(p.PIN_7, 6),
+        Keypin::new(p.PIN_8, 7),
+        Keypin::new(p.PIN_9, 8),
+        Keypin::new(p.PIN_20, 9),
+        Keypin::new(p.PIN_21, 10),
+        Keypin::new(p.PIN_22, 11),
+        Keypin::new(p.PIN_23, 12),
+        Keypin::new(p.PIN_26, 13),
+        Keypin::new(p.PIN_27, 14),
+        Keypin::new(p.PIN_28, 15),
+        Keypin::new(p.PIN_29, 16),
+    ]);
 
     let serial_tx = async {
         loop {
@@ -337,14 +260,132 @@ async fn run_primary(p: embassy_rp::Peripherals) {
         }
     };
 
-    embassy_futures::join::join4(usb, serial_tx, serial_rx, keyboard).await;
+    let scan_keys = async {
+        loop {
+            if let Some(event) = scanner.next().await {
+                let key_event = match event {
+                    ScanEvent::Down(index) => KeyEvent::Down(local_hand, index),
+                    ScanEvent::Up(index) => KeyEvent::Up(local_hand, index),
+                };
+                let _ = KEY_CHANNEL.try_send(key_event);
+            }
+        }
+    };
+
+    let sync_recv = async {
+        let mut sync_rx = sync::SyncReceiver::new(p.PIO0, p.PIN_1);
+        let remote_hand = local_hand.opposite();
+        let mut prev_state: u32 = 0;
+
+        loop {
+            // recv returns None if Manchester decoding fails (noise/corruption)
+            let Some(state) = sync_rx.recv().await else {
+                let _ = SERIAL_CHANNEL.try_send("Sync read error\r\n");
+                continue;
+            };
+            let changed = state ^ prev_state;
+            for i in 0..17u8 {
+                let mask = 1 << i;
+                if changed & mask != 0 {
+                    if state & mask != 0 {
+                        let _ = KEY_CHANNEL.try_send(KeyEvent::Down(remote_hand, i));
+                    } else {
+                        let _ = KEY_CHANNEL.try_send(KeyEvent::Up(remote_hand, i));
+                    }
+                }
+            }
+            prev_state = state;
+        }
+    };
+
+    let process_keys = async {
+        let mut matrix = Matrix::default();
+
+        loop {
+            let event = KEY_CHANNEL.receive().await;
+            match event {
+                KeyEvent::Down(hand, index) => {
+                    matrix.set_down(hand, index);
+                    let _ = SERIAL_CHANNEL.try_send(if hand == stash::Hand::Left {
+                        "Left "
+                    } else {
+                        "Right "
+                    });
+                    log_index(index);
+                    let _ = SERIAL_CHANNEL.try_send(" down\r\n");
+                    log_pressed_keys(&matrix);
+                }
+                KeyEvent::Up(hand, index) => {
+                    matrix.set_up(hand, index);
+                    let _ = SERIAL_CHANNEL.try_send(if hand == stash::Hand::Left {
+                        "Left "
+                    } else {
+                        "Right "
+                    });
+                    log_index(index);
+                    let _ = SERIAL_CHANNEL.try_send(" up\r\n");
+                    log_pressed_keys(&matrix);
+                }
+            }
+        }
+    };
+
+    let hid_keyboard = async {
+        let mut buf = [0u8; KEYBOARD_MAX_PACKET_SIZE];
+        loop {
+            let _ = keyboard_reader.read(&mut buf).await;
+        }
+    };
+
+    let hid_mouse = async {
+        let mut buf = [0u8; MOUSE_MAX_PACKET_SIZE];
+        loop {
+            let _ = mouse_reader.read(&mut buf).await;
+        }
+    };
+
+    embassy_futures::join::join4(
+        embassy_futures::join::join3(usb, serial_tx, serial_rx),
+        embassy_futures::join::join(scan_keys, sync_recv),
+        embassy_futures::join::join(hid_keyboard, hid_mouse),
+        process_keys,
+    )
+    .await;
 }
 
 async fn run_secondary(p: embassy_rp::Peripherals) {
-    let stash = Stash::new(p.FLASH);
-    let _config = stash.load().unwrap_or_default();
+    let mut sync_tx = sync::SyncSender::new(p.PIO0, p.PIN_1);
+    let mut state: u32 = 0;
 
-    loop {}
+    let mut scanner = Scanner::new([
+        Keypin::new(p.PIN_0, 0),
+        Keypin::new(p.PIN_2, 1),
+        Keypin::new(p.PIN_3, 2),
+        Keypin::new(p.PIN_4, 3),
+        Keypin::new(p.PIN_5, 4),
+        Keypin::new(p.PIN_6, 5),
+        Keypin::new(p.PIN_7, 6),
+        Keypin::new(p.PIN_8, 7),
+        Keypin::new(p.PIN_9, 8),
+        Keypin::new(p.PIN_20, 9),
+        Keypin::new(p.PIN_21, 10),
+        Keypin::new(p.PIN_22, 11),
+        Keypin::new(p.PIN_23, 12),
+        Keypin::new(p.PIN_26, 13),
+        Keypin::new(p.PIN_27, 14),
+        Keypin::new(p.PIN_28, 15),
+        Keypin::new(p.PIN_29, 16),
+    ]);
+
+    loop {
+        if let Some(event) = scanner.next().await {
+            match event {
+                ScanEvent::Down(index) => state |= 1 << index,
+                ScanEvent::Up(index) => state &= !(1 << index),
+            }
+            sync_tx.send(state).await;
+        }
+    }
 }
 
 #[embassy_executor::main]

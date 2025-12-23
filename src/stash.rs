@@ -12,6 +12,15 @@ pub enum Hand {
     Right,
 }
 
+impl Hand {
+    pub fn opposite(self) -> Self {
+        match self {
+            Hand::Left => Hand::Right,
+            Hand::Right => Hand::Left,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Config {
     pub hand: Hand,

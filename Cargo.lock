@@ -134,6 +134,7 @@ dependencies = [
  "embassy-sync",
  "embassy-time",
  "embassy-usb",
+ "fixed",
  "futures-core",
  "futures-util",
  "panic-halt",

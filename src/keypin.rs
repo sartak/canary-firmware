@@ -10,21 +10,15 @@ pub enum KeypinEvent {
 
 pub struct Keypin {
     gpio: Input<'static>,
-    pub label: &'static str,
-    pub keycode: Option<char>,
+    pub index: u8,
     is_down: bool,
 }
 
 impl Keypin {
-    pub fn new(
-        pin: embassy_rp::Peri<'static, impl embassy_rp::gpio::Pin>,
-        label: &'static str,
-        keycode: Option<char>,
-    ) -> Self {
+    pub fn new(pin: embassy_rp::Peri<'static, impl embassy_rp::gpio::Pin>, index: u8) -> Self {
         Self {
             gpio: Input::new(pin, Pull::Up),
-            label,
-            keycode,
+            index,
             is_down: false,
         }
     }

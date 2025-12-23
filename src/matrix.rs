@@ -1,51 +1,25 @@
-use crate::debounce::Debounced;
-use crate::keypin::{Keypin, KeypinEvent};
-use crate::stash;
-use core::task::Poll;
-use futures_core::Stream;
+use crate::stash::Hand;
 
-pub enum MatrixEvent {
-    KeyDown(&'static str, Option<char>),
-    KeyUp(&'static str, Option<char>),
-}
+#[derive(Default, Clone, Copy)]
+pub struct Matrix(u64);
 
-pub struct Matrix<const N: usize> {
-    hand: stash::Hand,
-    pins: [Debounced<Keypin>; N],
-}
-
-impl<const N: usize> Matrix<N> {
-    pub fn new(hand: stash::Hand, pins: [Keypin; N]) -> Self {
-        Self {
-            hand,
-            pins: pins.map(Debounced::new),
+impl Matrix {
+    fn bit_index(hand: Hand, index: u8) -> u8 {
+        match hand {
+            Hand::Left => index,
+            Hand::Right => index + 32,
         }
     }
-}
 
-impl<const N: usize> Stream for Matrix<N> {
-    type Item = MatrixEvent;
+    pub fn set_down(&mut self, hand: Hand, index: u8) {
+        self.0 |= 1 << Self::bit_index(hand, index);
+    }
 
-    fn poll_next(
-        self: core::pin::Pin<&mut Self>,
-        cx: &mut core::task::Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
-        let this = self.get_mut();
+    pub fn set_up(&mut self, hand: Hand, index: u8) {
+        self.0 &= !(1 << Self::bit_index(hand, index));
+    }
 
-        for debounced_pin in this.pins.iter_mut() {
-            let pin_label = debounced_pin.inner.label;
-            let pin_keycode = debounced_pin.inner.keycode;
-
-            let mut pin = core::pin::Pin::new(debounced_pin);
-            if let Poll::Ready(Some(event)) = pin.as_mut().poll_next(cx) {
-                let matrix_event = match event {
-                    KeypinEvent::Down => MatrixEvent::KeyDown(pin_label, pin_keycode),
-                    KeypinEvent::Up => MatrixEvent::KeyUp(pin_label, pin_keycode),
-                };
-                return Poll::Ready(Some(matrix_event));
-            }
-        }
-
-        Poll::Pending
+    pub fn is_down(&self, hand: Hand, index: u8) -> bool {
+        (self.0 & (1 << Self::bit_index(hand, index))) != 0
     }
 }
