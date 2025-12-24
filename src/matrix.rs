@@ -26,14 +26,15 @@ impl Matrix {
         (self.0 & (1 << Self::bit_index(hand, index))) != 0
     }
 
-    pub fn keyboard_report(self) -> KeyboardReport {
+    pub fn keyboard_report(self, layer: usize) -> KeyboardReport {
         let mut report = KeyboardReport::default();
         let mut slot = 0;
 
         for (keys, hand) in [(&LEFT_KEYS, Hand::Left), (&RIGHT_KEYS, Hand::Right)] {
             for (i, key) in keys.iter().enumerate().take(NUM_KEYS) {
                 if self.is_down(hand, i as u8)
-                    && let Some(hid_code) = key.tap.to_hid_code()
+                    && let Some(keycode) = key.tap[layer]
+                    && let Some(hid_code) = keycode.to_hid_code()
                     && slot < 6
                 {
                     report.keycodes[slot] = hid_code;

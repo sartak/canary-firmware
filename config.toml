@@ -9,112 +9,115 @@ serial_number = "1"
 # Pretty stable at 5_000_000 so this gives us plenty of buffer.
 bit_rate = 500_000
 
+[keyboard]
+layers = ["Alpha", "Symbol", "Number", "Function"]
+
 [keys.left.pin_7] # top pinky
 id = "W"
-tap = "w"
+tap.Alpha = "w"
 [keys.left.pin_26] # top ring
 id = "L"
-tap = "l"
+tap.Alpha = "l"
 [keys.left.pin_27] # top middle
 id = "Y"
-tap = "y"
+tap.Alpha = "y"
 [keys.left.pin_28] # top index
 id = "P"
-tap = "p"
+tap.Alpha = "p"
 [keys.left.pin_29] # top center
 id = "B"
-tap = "b"
+tap.Alpha = "b"
 
 [keys.left.pin_22] # home pinky
 id = "C"
-tap = "c"
+tap.Alpha = "c"
 [keys.left.pin_20] # home ring
 id = "R"
-tap = "r"
+tap.Alpha = "r"
 [keys.left.pin_23] # home middle
 id = "S"
-tap = "s"
+tap.Alpha = "s"
 [keys.left.pin_21] # home index
 id = "T"
-tap = "t"
+tap.Alpha = "t"
 [keys.left.pin_0] # home center
 id = "G"
-tap = "g"
+tap.Alpha = "g"
 
 [keys.left.pin_2] # bottom pinky
 id = "Q"
-tap = "q"
+tap.Alpha = "q"
 [keys.left.pin_3] # bottom ring
 id = "J"
-tap = "j"
+tap.Alpha = "j"
 [keys.left.pin_4] # bottom middle
 id = "V"
-tap = "v"
+tap.Alpha = "v"
 [keys.left.pin_5] # bottom index
 id = "D"
-tap = "d"
+tap.Alpha = "d"
 [keys.left.pin_6] # bottom center
 id = "K"
-tap = "k"
+tap.Alpha = "k"
 
 [keys.left.pin_8] # thumb left
 id = "Dup"
-tap = "Dup"
+tap.Alpha = "Dup"
 [keys.left.pin_9] # thumb right
 id = "Backspace"
-tap = "Backspace"
+tap.Alpha = "Backspace"
 
 [keys.right.pin_29] # top center
 id = "Z"
-tap = "z"
+tap.Alpha = "z"
 [keys.right.pin_28] # top index
 id = "F"
-tap = "f"
+tap.Alpha = "f"
 [keys.right.pin_27] # top middle
 id = "O"
-tap = "o"
+tap.Alpha = "o"
 [keys.right.pin_26] # top ring
 id = "U"
-tap = "u"
+tap.Alpha = "u"
 [keys.right.pin_7] # top pinky
 id = "'"
-tap = "'"
+tap.Alpha = "'"
 
 [keys.right.pin_0] # home center
 id = "M"
-tap = "m"
+tap.Alpha = "m"
 [keys.right.pin_21] # home index
 id = "N"
-tap = "n"
+tap.Alpha = "n"
 [keys.right.pin_23] # home middle
 id = "E"
-tap = "e"
+tap.Alpha = "e"
 [keys.right.pin_20] # home ring
 id = "I"
-tap = "i"
+tap.Alpha = "i"
 [keys.right.pin_22] # home pinky
 id = "A"
-tap = "a"
+tap.Alpha = "a"
 
 [keys.right.pin_6] # bottom center
 id = "X"
-tap = "x"
+tap.Alpha = "x"
 [keys.right.pin_5] # bottom index
 id = "H"
-tap = "h"
+tap.Alpha = "h"
 [keys.right.pin_4] # bottom middle
 id = "."
-tap = "."
+tap.Alpha = "."
 [keys.right.pin_3] # bottom ring
 id = ","
-tap = ","
+tap.Alpha = ","
 [keys.right.pin_2] # bottom pinky
 id = "Enter"
-tap = "Enter"
+tap.Alpha = "Enter"
 
 [keys.right.pin_9] # thumb left
 id = "Space"
-tap = "Space"
+tap.Alpha = "Space"
 [keys.right.pin_8] # thumb right
 id = "Tab"
-tap = "Tab"
+tap.Alpha = "Tab"

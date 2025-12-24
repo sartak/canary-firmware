@@ -31,7 +31,7 @@
 ## Milestone 4: Layers
 **Goal**: Implement layer functionality
 
-- [ ] Add layers to configuration
+- [x] Add layers to configuration
 - [ ] Layer switching (hold, oneshot, toggle)
 - [ ] Sidechannel: emit layer changes
 

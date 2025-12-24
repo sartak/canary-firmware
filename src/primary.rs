@@ -244,6 +244,7 @@ pub async fn run(p: embassy_rp::Peripherals) {
 
     let process_keys = async {
         let mut matrix = Matrix::default();
+        let current_layer: usize = 0;
 
         loop {
             let event = KEY_CHANNEL.receive().await;
@@ -259,7 +260,7 @@ pub async fn run(p: embassy_rp::Peripherals) {
                     let _ = SERIAL_CHANNEL.try_send(" up\r\n");
                 }
             }
-            let _ = KEYBOARD_REPORT_CHANNEL.try_send(matrix.keyboard_report());
+            let _ = KEYBOARD_REPORT_CHANNEL.try_send(matrix.keyboard_report(current_layer));
         }
     };
 
