@@ -8,3 +8,113 @@ serial_number = "1"
 [split]
 # Pretty stable at 5_000_000 so this gives us plenty of buffer.
 bit_rate = 500_000
+
+[keys.left.pin_7] # top pinky
+id = "W"
+tap = "w"
+[keys.left.pin_26] # top ring
+id = "L"
+tap = "l"
+[keys.left.pin_27] # top middle
+id = "Y"
+tap = "y"
+[keys.left.pin_28] # top index
+id = "P"
+tap = "p"
+[keys.left.pin_29] # top center
+id = "B"
+tap = "b"
+
+[keys.left.pin_22] # home pinky
+id = "C"
+tap = "c"
+[keys.left.pin_20] # home ring
+id = "R"
+tap = "r"
+[keys.left.pin_23] # home middle
+id = "S"
+tap = "s"
+[keys.left.pin_21] # home index
+id = "T"
+tap = "t"
+[keys.left.pin_0] # home center
+id = "G"
+tap = "g"
+
+[keys.left.pin_2] # bottom pinky
+id = "Q"
+tap = "q"
+[keys.left.pin_3] # bottom ring
+id = "J"
+tap = "j"
+[keys.left.pin_4] # bottom middle
+id = "V"
+tap = "v"
+[keys.left.pin_5] # bottom index
+id = "D"
+tap = "d"
+[keys.left.pin_6] # bottom center
+id = "K"
+tap = "k"
+
+[keys.left.pin_8] # thumb left
+id = "Dup"
+tap = "Dup"
+[keys.left.pin_9] # thumb right
+id = "Backspace"
+tap = "Backspace"
+
+[keys.right.pin_29] # top center
+id = "Z"
+tap = "z"
+[keys.right.pin_28] # top index
+id = "F"
+tap = "f"
+[keys.right.pin_27] # top middle
+id = "O"
+tap = "o"
+[keys.right.pin_26] # top ring
+id = "U"
+tap = "u"
+[keys.right.pin_7] # top pinky
+id = "'"
+tap = "'"
+
+[keys.right.pin_0] # home center
+id = "M"
+tap = "m"
+[keys.right.pin_21] # home index
+id = "N"
+tap = "n"
+[keys.right.pin_23] # home middle
+id = "E"
+tap = "e"
+[keys.right.pin_20] # home ring
+id = "I"
+tap = "i"
+[keys.right.pin_22] # home pinky
+id = "A"
+tap = "a"
+
+[keys.right.pin_6] # bottom center
+id = "X"
+tap = "x"
+[keys.right.pin_5] # bottom index
+id = "H"
+tap = "h"
+[keys.right.pin_4] # bottom middle
+id = "."
+tap = "."
+[keys.right.pin_3] # bottom ring
+id = ","
+tap = ","
+[keys.right.pin_2] # bottom pinky
+id = "Enter"
+tap = "Enter"
+
+[keys.right.pin_9] # thumb left
+id = "Space"
+tap = "Space"
+[keys.right.pin_8] # thumb right
+id = "Tab"
+tap = "Tab"
