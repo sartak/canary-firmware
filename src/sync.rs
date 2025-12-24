@@ -5,8 +5,7 @@ use embassy_rp::peripherals::PIO0;
 use embassy_rp::pio::program::pio_asm;
 use embassy_rp::pio::{Config, Direction, Pio, PioPin, ShiftDirection, StateMachine};
 
-// Pretty stable at 5_000_000 so this gives us plenty of buffer.
-const BIT_RATE: u64 = 500_000;
+use crate::config::SPLIT_BIT_RATE;
 const TX_CYCLES_PER_BIT: u64 = 8;
 const RX_CYCLES_PER_BIT: u64 = 8;
 
@@ -134,7 +133,7 @@ impl SyncReceiver {
         cfg.set_jmp_pin(&sync_pin);
         cfg.shift_in.direction = ShiftDirection::Right;
 
-        let pio_freq = BIT_RATE * RX_CYCLES_PER_BIT;
+        let pio_freq = SPLIT_BIT_RATE * RX_CYCLES_PER_BIT;
         let divider_256 = (clk_sys_freq() as u64) * 256 / pio_freq;
         cfg.clock_divider =
             fixed::FixedU32::<fixed::types::extra::U8>::from_bits(divider_256 as u32);
@@ -208,7 +207,7 @@ impl SyncSender {
         cfg.set_set_pins(&[&sync_pin]);
         cfg.shift_out.direction = ShiftDirection::Right;
 
-        let pio_freq = BIT_RATE * TX_CYCLES_PER_BIT;
+        let pio_freq = SPLIT_BIT_RATE * TX_CYCLES_PER_BIT;
         let divider_256 = (clk_sys_freq() as u64) * 256 / pio_freq;
         cfg.clock_divider =
             fixed::FixedU32::<fixed::types::extra::U8>::from_bits(divider_256 as u32);

@@ -1,0 +1,10 @@
+[usb]
+vendor_id = 0x2E8A
+product_id = 0x000A
+manufacturer = "shawn.dev"
+product = "Sweep"
+serial_number = "1"
+
+[split]
+# Pretty stable at 5_000_000 so this gives us plenty of buffer.
+bit_rate = 500_000

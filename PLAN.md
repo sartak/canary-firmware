@@ -24,7 +24,7 @@
 **Goal**: Compile-time configuration
 
 - [ ] Define TOML configuration schema for keyboard layout
-- [ ] Parse TOML at compile time
+- [x] Parse TOML at compile time
 - [ ] Map physical key positions to logical keys
 - [ ] Support for basic keycodes (letters, numbers, symbols)
 

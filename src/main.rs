@@ -8,6 +8,10 @@ mod scanner;
 mod stash;
 mod sync;
 
+mod config {
+    include!(concat!(env!("OUT_DIR"), "/config.rs"));
+}
+
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
 use embassy_rp::peripherals::{PIO0, USB};
@@ -123,10 +127,10 @@ async fn run_primary(p: embassy_rp::Peripherals) {
     static KEYBOARD_HID_STATE: StaticCell<HidState> = StaticCell::new();
     static MOUSE_HID_STATE: StaticCell<HidState> = StaticCell::new();
 
-    let mut usb_config = UsbConfig::new(0x2E8A, 0x000a);
-    usb_config.manufacturer = Some("shawn.dev");
-    usb_config.product = Some("Sweep");
-    usb_config.serial_number = Some("1");
+    let mut usb_config = UsbConfig::new(config::USB_VENDOR_ID, config::USB_PRODUCT_ID);
+    usb_config.manufacturer = Some(config::USB_MANUFACTURER);
+    usb_config.product = Some(config::USB_PRODUCT);
+    usb_config.serial_number = Some(config::USB_SERIAL_NUMBER);
     usb_config.max_power = USB_MAX_POWER;
     usb_config.max_packet_size_0 = USB_MAX_PACKET_SIZE as u8;
     usb_config.device_class = 0xef;
