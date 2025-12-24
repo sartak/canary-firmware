@@ -2,6 +2,7 @@
 #![no_main]
 
 mod debounce;
+mod key;
 mod keypin;
 mod matrix;
 mod scanner;

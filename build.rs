@@ -34,14 +34,20 @@ struct SplitConfig {
     bit_rate: u64,
 }
 
-fn validate_tap(tap: &str) -> Result<(), String> {
+fn parse_keycode(tap: &str) -> Result<String, String> {
+    // Single lowercase letter -> uppercase variant
+    if tap.len() == 1 {
+        let c = tap.chars().next().unwrap();
+        if c.is_ascii_lowercase() {
+            return Ok(c.to_ascii_uppercase().to_string());
+        }
+    }
+    // Punctuation and special keys
     match tap {
-        // Single lowercase letter
-        s if s.len() == 1 && s.chars().next().unwrap().is_ascii_lowercase() => Ok(()),
-        // Punctuation
-        "," | "." | "'" => Ok(()),
-        // Special keys
-        "Space" | "Enter" | "Backspace" | "Tab" | "Dup" => Ok(()),
+        "," => Ok("Comma".into()),
+        "." => Ok("Period".into()),
+        "'" => Ok("Apostrophe".into()),
+        "Space" | "Enter" | "Backspace" | "Tab" | "Dup" => Ok(tap.into()),
         _ => Err(format!("invalid tap value: {:?}", tap)),
     }
 }
@@ -57,7 +63,7 @@ fn parse_keys(keys: &KeysConfig) -> Result<Vec<u8>, String> {
     let mut left_pins: Vec<u8> = Vec::new();
     for (key_name, key_config) in &keys.left {
         let pin_id = parse_pin_id(key_name)?;
-        validate_tap(&key_config.tap).map_err(|e| format!("left {}: {}", key_name, e))?;
+        parse_keycode(&key_config.tap).map_err(|e| format!("left {}: {}", key_name, e))?;
         left_pins.push(pin_id);
     }
     left_pins.sort();
@@ -65,7 +71,7 @@ fn parse_keys(keys: &KeysConfig) -> Result<Vec<u8>, String> {
     let mut right_pins: Vec<u8> = Vec::new();
     for (key_name, key_config) in &keys.right {
         let pin_id = parse_pin_id(key_name)?;
-        validate_tap(&key_config.tap).map_err(|e| format!("right {}: {}", key_name, e))?;
+        parse_keycode(&key_config.tap).map_err(|e| format!("right {}: {}", key_name, e))?;
         right_pins.push(pin_id);
     }
     right_pins.sort();
@@ -111,14 +117,22 @@ fn main() {
         .iter()
         .map(|&gpio| {
             let cfg = left_by_pin.get(&gpio).unwrap();
-            format!("KeyConfig {{ id: {:?}, tap: {:?} }}", cfg.id, cfg.tap)
+            let keycode = parse_keycode(&cfg.tap).unwrap();
+            format!(
+                "KeyConfig {{ id: {:?}, tap: Keycode::{} }}",
+                cfg.id, keycode
+            )
         })
         .collect();
     let right_entries: Vec<String> = gpio_pins
         .iter()
         .map(|&gpio| {
             let cfg = right_by_pin.get(&gpio).unwrap();
-            format!("KeyConfig {{ id: {:?}, tap: {:?} }}", cfg.id, cfg.tap)
+            let keycode = parse_keycode(&cfg.tap).unwrap();
+            format!(
+                "KeyConfig {{ id: {:?}, tap: Keycode::{} }}",
+                cfg.id, keycode
+            )
         })
         .collect();
 
@@ -129,7 +143,9 @@ fn main() {
         .collect();
 
     let generated = format!(
-        r#"pub const USB_VENDOR_ID: u16 = {:#06x};
+        r#"use crate::key::Keycode;
+
+pub const USB_VENDOR_ID: u16 = {:#06x};
 pub const USB_PRODUCT_ID: u16 = {:#06x};
 pub const USB_MANUFACTURER: &str = {:?};
 pub const USB_PRODUCT: &str = {:?};
@@ -139,7 +155,7 @@ pub const SPLIT_BIT_RATE: u64 = {};
 
 pub struct KeyConfig {{
     pub id: &'static str,
-    pub tap: &'static str,
+    pub tap: Keycode,
 }}
 
 pub const NUM_KEYS: usize = {num_keys};
