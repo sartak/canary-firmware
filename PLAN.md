@@ -26,7 +26,7 @@
 - [x] Define TOML configuration schema for keyboard layout
 - [x] Parse TOML at compile time
 - [x] Map physical key positions to logical keys
-- [ ] Support for basic keycodes (letters, numbers, symbols)
+- [x] Support for basic keycodes (letters, numbers, symbols)
 
 ## Milestone 4: Layers
 **Goal**: Implement layer functionality

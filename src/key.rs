@@ -35,3 +35,45 @@ pub enum Keycode {
     Tab,
     Dup,
 }
+
+impl Keycode {
+    /// Returns the USB HID scan code for this key, or None for special keys.
+    pub const fn to_hid_code(self) -> Option<u8> {
+        match self {
+            Self::A => Some(0x04),
+            Self::B => Some(0x05),
+            Self::C => Some(0x06),
+            Self::D => Some(0x07),
+            Self::E => Some(0x08),
+            Self::F => Some(0x09),
+            Self::G => Some(0x0A),
+            Self::H => Some(0x0B),
+            Self::I => Some(0x0C),
+            Self::J => Some(0x0D),
+            Self::K => Some(0x0E),
+            Self::L => Some(0x0F),
+            Self::M => Some(0x10),
+            Self::N => Some(0x11),
+            Self::O => Some(0x12),
+            Self::P => Some(0x13),
+            Self::Q => Some(0x14),
+            Self::R => Some(0x15),
+            Self::S => Some(0x16),
+            Self::T => Some(0x17),
+            Self::U => Some(0x18),
+            Self::V => Some(0x19),
+            Self::W => Some(0x1A),
+            Self::X => Some(0x1B),
+            Self::Y => Some(0x1C),
+            Self::Z => Some(0x1D),
+            Self::Enter => Some(0x28),
+            Self::Backspace => Some(0x2A),
+            Self::Tab => Some(0x2B),
+            Self::Space => Some(0x2C),
+            Self::Comma => Some(0x36),
+            Self::Period => Some(0x37),
+            Self::Apostrophe => Some(0x34),
+            Self::Dup => None,
+        }
+    }
+}

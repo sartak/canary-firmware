@@ -41,6 +41,7 @@ enum KeyEvent {
 }
 
 static KEY_CHANNEL: Channel<ThreadModeRawMutex, KeyEvent, SERIAL_CHANNEL_CAPACITY> = Channel::new();
+static KEYBOARD_REPORT_CHANNEL: Channel<ThreadModeRawMutex, KeyboardReport, 4> = Channel::new();
 
 fn pin_key(hand: stash::Hand, index: u8) -> &'static config::KeyConfig {
     match hand {
@@ -121,7 +122,7 @@ pub async fn run(p: embassy_rp::Peripherals) {
             max_packet_size: KEYBOARD_MAX_PACKET_SIZE as u16,
         },
     );
-    let (mut keyboard_reader, _keyboard_writer) = keyboard_hid.split();
+    let (mut keyboard_reader, mut keyboard_writer) = keyboard_hid.split();
 
     let mouse_hid = HidReaderWriter::<_, 1, MOUSE_MAX_PACKET_SIZE>::new(
         &mut builder,
@@ -258,13 +259,21 @@ pub async fn run(p: embassy_rp::Peripherals) {
                     let _ = SERIAL_CHANNEL.try_send(" up\r\n");
                 }
             }
+            let _ = KEYBOARD_REPORT_CHANNEL.try_send(matrix.keyboard_report());
         }
     };
 
-    let hid_keyboard = async {
+    let hid_keyboard_rx = async {
         let mut buf = [0u8; KEYBOARD_MAX_PACKET_SIZE];
         loop {
             let _ = keyboard_reader.read(&mut buf).await;
+        }
+    };
+
+    let hid_keyboard_tx = async {
+        loop {
+            let report = KEYBOARD_REPORT_CHANNEL.receive().await;
+            let _ = keyboard_writer.write_serialize(&report).await;
         }
     };
 
@@ -278,7 +287,7 @@ pub async fn run(p: embassy_rp::Peripherals) {
     embassy_futures::join::join4(
         embassy_futures::join::join3(usb, serial_tx, serial_rx),
         embassy_futures::join::join(scan_keys, sync_recv),
-        embassy_futures::join::join(hid_keyboard, hid_mouse),
+        embassy_futures::join::join3(hid_keyboard_rx, hid_keyboard_tx, hid_mouse),
         process_keys,
     )
     .await;
