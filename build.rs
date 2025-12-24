@@ -1,10 +1,23 @@
 use serde::Deserialize;
-use std::{env, fs, path::Path};
+use std::{collections::HashMap, env, fs, path::Path};
 
 #[derive(Deserialize)]
 struct Config {
     usb: UsbConfig,
     split: SplitConfig,
+    keys: KeysConfig,
+}
+
+#[derive(Deserialize)]
+struct KeysConfig {
+    left: HashMap<String, KeyConfig>,
+    right: HashMap<String, KeyConfig>,
+}
+
+#[derive(Deserialize)]
+struct KeyConfig {
+    id: String,
+    tap: String,
 }
 
 #[derive(Deserialize)]
@@ -21,14 +34,99 @@ struct SplitConfig {
     bit_rate: u64,
 }
 
+fn validate_tap(tap: &str) -> Result<(), String> {
+    match tap {
+        // Single lowercase letter
+        s if s.len() == 1 && s.chars().next().unwrap().is_ascii_lowercase() => Ok(()),
+        // Punctuation
+        "," | "." | "'" => Ok(()),
+        // Special keys
+        "Space" | "Enter" | "Backspace" | "Tab" | "Dup" => Ok(()),
+        _ => Err(format!("invalid tap value: {:?}", tap)),
+    }
+}
+
+fn parse_pin_id(s: &str) -> Result<u8, String> {
+    s.strip_prefix("pin_")
+        .ok_or_else(|| format!("key must start with 'pin_': {:?}", s))?
+        .parse::<u8>()
+        .map_err(|_| format!("invalid pin id: {:?}", s))
+}
+
+fn parse_keys(keys: &KeysConfig) -> Result<Vec<u8>, String> {
+    let mut left_pins: Vec<u8> = Vec::new();
+    for (key_name, key_config) in &keys.left {
+        let pin_id = parse_pin_id(key_name)?;
+        validate_tap(&key_config.tap).map_err(|e| format!("left {}: {}", key_name, e))?;
+        left_pins.push(pin_id);
+    }
+    left_pins.sort();
+
+    let mut right_pins: Vec<u8> = Vec::new();
+    for (key_name, key_config) in &keys.right {
+        let pin_id = parse_pin_id(key_name)?;
+        validate_tap(&key_config.tap).map_err(|e| format!("right {}: {}", key_name, e))?;
+        right_pins.push(pin_id);
+    }
+    right_pins.sort();
+
+    if left_pins != right_pins {
+        return Err(format!(
+            "left and right must have same pins: left={:?}, right={:?}",
+            left_pins, right_pins
+        ));
+    }
+
+    Ok(left_pins)
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=config.toml");
 
     let config_str = fs::read_to_string("config.toml").expect("Failed to read config.toml");
     let config: Config = toml::from_str(&config_str).expect("Failed to parse config.toml");
 
+    let gpio_pins = parse_keys(&config.keys).expect("Invalid key configuration");
+    let num_keys = gpio_pins.len();
+
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("config.rs");
+
+    // Build lookup from GPIO pin -> config
+    let left_by_pin: HashMap<u8, &KeyConfig> = config
+        .keys
+        .left
+        .iter()
+        .map(|(name, cfg)| (parse_pin_id(name).unwrap(), cfg))
+        .collect();
+    let right_by_pin: HashMap<u8, &KeyConfig> = config
+        .keys
+        .right
+        .iter()
+        .map(|(name, cfg)| (parse_pin_id(name).unwrap(), cfg))
+        .collect();
+
+    // Generate arrays indexed by scanner index (position in gpio_pins)
+    let left_entries: Vec<String> = gpio_pins
+        .iter()
+        .map(|&gpio| {
+            let cfg = left_by_pin.get(&gpio).unwrap();
+            format!("KeyConfig {{ id: {:?}, tap: {:?} }}", cfg.id, cfg.tap)
+        })
+        .collect();
+    let right_entries: Vec<String> = gpio_pins
+        .iter()
+        .map(|&gpio| {
+            let cfg = right_by_pin.get(&gpio).unwrap();
+            format!("KeyConfig {{ id: {:?}, tap: {:?} }}", cfg.id, cfg.tap)
+        })
+        .collect();
+
+    let scanner_pins: Vec<String> = gpio_pins
+        .iter()
+        .enumerate()
+        .map(|(idx, gpio)| format!("Keypin::new($p.PIN_{}, {})", gpio, idx))
+        .collect();
 
     let generated = format!(
         r#"pub const USB_VENDOR_ID: u16 = {:#06x};
@@ -38,6 +136,22 @@ pub const USB_PRODUCT: &str = {:?};
 pub const USB_SERIAL_NUMBER: &str = {:?};
 
 pub const SPLIT_BIT_RATE: u64 = {};
+
+pub struct KeyConfig {{
+    pub id: &'static str,
+    pub tap: &'static str,
+}}
+
+pub const NUM_KEYS: usize = {num_keys};
+pub const LEFT_KEYS: [KeyConfig; NUM_KEYS] = [{left_keys}];
+pub const RIGHT_KEYS: [KeyConfig; NUM_KEYS] = [{right_keys}];
+
+macro_rules! keypins {{
+    ($p:expr) => {{
+        [{scanner_pins}]
+    }};
+}}
+pub(crate) use keypins;
 "#,
         config.usb.vendor_id,
         config.usb.product_id,
@@ -45,6 +159,10 @@ pub const SPLIT_BIT_RATE: u64 = {};
         config.usb.product,
         config.usb.serial_number,
         config.split.bit_rate,
+        num_keys = num_keys,
+        left_keys = left_entries.join(", "),
+        right_keys = right_entries.join(", "),
+        scanner_pins = scanner_pins.join(", "),
     );
 
     fs::write(&dest_path, generated).expect("Failed to write config.rs");

@@ -57,39 +57,11 @@ enum KeyEvent {
 
 static KEY_CHANNEL: Channel<ThreadModeRawMutex, KeyEvent, SERIAL_CHANNEL_CAPACITY> = Channel::new();
 
-const DIGITS: [&str; 10] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
-
-fn log_index(index: u8) {
-    if index >= 10 {
-        let _ = SERIAL_CHANNEL.try_send(DIGITS[(index / 10) as usize]);
+fn pin_key(hand: stash::Hand, index: u8) -> &'static config::KeyConfig {
+    match hand {
+        stash::Hand::Left => &config::LEFT_KEYS[index as usize],
+        stash::Hand::Right => &config::RIGHT_KEYS[index as usize],
     }
-    let _ = SERIAL_CHANNEL.try_send(DIGITS[(index % 10) as usize]);
-}
-
-fn log_pressed_keys(matrix: &Matrix) {
-    let _ = SERIAL_CHANNEL.try_send("  down: ");
-    let mut first = true;
-    for i in 0..32 {
-        if matrix.is_down(stash::Hand::Left, i) {
-            if !first {
-                let _ = SERIAL_CHANNEL.try_send(" ");
-            }
-            let _ = SERIAL_CHANNEL.try_send("L");
-            log_index(i);
-            first = false;
-        }
-    }
-    for i in 0..32 {
-        if matrix.is_down(stash::Hand::Right, i) {
-            if !first {
-                let _ = SERIAL_CHANNEL.try_send(" ");
-            }
-            let _ = SERIAL_CHANNEL.try_send("R");
-            log_index(i);
-            first = false;
-        }
-    }
-    let _ = SERIAL_CHANNEL.try_send("\r\n");
 }
 
 async fn run_primary(p: embassy_rp::Peripherals) {
@@ -181,25 +153,7 @@ async fn run_primary(p: embassy_rp::Peripherals) {
     let mut usb = builder.build();
     let usb = usb.run();
 
-    let mut scanner = Scanner::new([
-        Keypin::new(p.PIN_0, 0),
-        Keypin::new(p.PIN_2, 1),
-        Keypin::new(p.PIN_3, 2),
-        Keypin::new(p.PIN_4, 3),
-        Keypin::new(p.PIN_5, 4),
-        Keypin::new(p.PIN_6, 5),
-        Keypin::new(p.PIN_7, 6),
-        Keypin::new(p.PIN_8, 7),
-        Keypin::new(p.PIN_9, 8),
-        Keypin::new(p.PIN_20, 9),
-        Keypin::new(p.PIN_21, 10),
-        Keypin::new(p.PIN_22, 11),
-        Keypin::new(p.PIN_23, 12),
-        Keypin::new(p.PIN_26, 13),
-        Keypin::new(p.PIN_27, 14),
-        Keypin::new(p.PIN_28, 15),
-        Keypin::new(p.PIN_29, 16),
-    ]);
+    let mut scanner = Scanner::new(config::keypins!(p));
 
     let serial_tx = async {
         loop {
@@ -310,25 +264,13 @@ async fn run_primary(p: embassy_rp::Peripherals) {
             match event {
                 KeyEvent::Down(hand, index) => {
                     matrix.set_down(hand, index);
-                    let _ = SERIAL_CHANNEL.try_send(if hand == stash::Hand::Left {
-                        "Left "
-                    } else {
-                        "Right "
-                    });
-                    log_index(index);
+                    let _ = SERIAL_CHANNEL.try_send(pin_key(hand, index).id);
                     let _ = SERIAL_CHANNEL.try_send(" down\r\n");
-                    log_pressed_keys(&matrix);
                 }
                 KeyEvent::Up(hand, index) => {
                     matrix.set_up(hand, index);
-                    let _ = SERIAL_CHANNEL.try_send(if hand == stash::Hand::Left {
-                        "Left "
-                    } else {
-                        "Right "
-                    });
-                    log_index(index);
+                    let _ = SERIAL_CHANNEL.try_send(pin_key(hand, index).id);
                     let _ = SERIAL_CHANNEL.try_send(" up\r\n");
-                    log_pressed_keys(&matrix);
                 }
             }
         }
@@ -361,25 +303,7 @@ async fn run_secondary(p: embassy_rp::Peripherals) {
     let mut sync_tx = sync::SyncSender::new(p.PIO0, p.PIN_1);
     let mut state: u32 = 0;
 
-    let mut scanner = Scanner::new([
-        Keypin::new(p.PIN_0, 0),
-        Keypin::new(p.PIN_2, 1),
-        Keypin::new(p.PIN_3, 2),
-        Keypin::new(p.PIN_4, 3),
-        Keypin::new(p.PIN_5, 4),
-        Keypin::new(p.PIN_6, 5),
-        Keypin::new(p.PIN_7, 6),
-        Keypin::new(p.PIN_8, 7),
-        Keypin::new(p.PIN_9, 8),
-        Keypin::new(p.PIN_20, 9),
-        Keypin::new(p.PIN_21, 10),
-        Keypin::new(p.PIN_22, 11),
-        Keypin::new(p.PIN_23, 12),
-        Keypin::new(p.PIN_26, 13),
-        Keypin::new(p.PIN_27, 14),
-        Keypin::new(p.PIN_28, 15),
-        Keypin::new(p.PIN_29, 16),
-    ]);
+    let mut scanner = Scanner::new(config::keypins!(p));
 
     loop {
         if let Some(event) = scanner.next().await {

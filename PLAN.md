@@ -23,7 +23,7 @@
 ## Milestone 3: Configuration
 **Goal**: Compile-time configuration
 
-- [ ] Define TOML configuration schema for keyboard layout
+- [x] Define TOML configuration schema for keyboard layout
 - [x] Parse TOML at compile time
 - [ ] Map physical key positions to logical keys
 - [ ] Support for basic keycodes (letters, numbers, symbols)
